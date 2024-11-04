@@ -1,0 +1,91 @@
+from hub import light_matrix, port, motion_sensor
+import runloop, motor, motor_pair
+
+motor_pair.pair(motor_pair.PAIR_1, port.D, port.A)
+# Definição dos pares de motores de locomoção
+
+def conversor(x):
+    y = (360 * x) / 17.5
+    return y
+# Conversor de graus para cm
+async def pausa (tempo):
+    await runloop.sleep_ms(tempo)
+
+async def mover(distancia,velocidade, kp, ki):
+    integral = 0
+    motion_sensor.reset_yaw(0)
+    limite = conversor(distancia)
+    await pausa(400)
+    motor.reset_relative_position(port.A, 0)
+    erro = 0-motion_sensor.tilt_angles()[0]
+
+    integral = integral + erro 
+    correcao = (erro*kp) + (integral*ki)
+    motor_pair.move_tank(motor_pair.PAIR_1,velocidade-correcao,velocidade+correcao)# Ajusta a velocidade
+    while abs (motor.relative_position(port.A)) < limite:
+        pass# Aguardar o motor se mover até o limite
+    motor_pair.stop(motor_pair.PAIR_1)# Para o motor após o movimento
+
+async def curva(angulo, kp, ki):
+    # Usa o sensor de inclinação para controlar a curva
+    motion_sensor.reset_yaw(0)
+    integral = 0
+    while True:
+        erro = angulo - motion_sensor.tilt_angles()[0]  # Calcula o erro de inclinação
+        integral = integral + erro
+        if integral>80:
+            integral = 80
+        correcao  = (erro * kp) + (integral*ki)  # Ajusta a velocidade com o valor proporcional
+        
+        # Movimenta o robô na direção necessária
+        motor_pair.move_tank(motor_pair.PAIR_1, round(correcao * -1), round(correcao))
+
+        # Verifica se o erro é pequeno o suficiente para parar
+        if abs(erro) < 0.1:  # Um pequeno erro de tolerância para parar a curva
+            break  # Sai do loop quando a curva for concluída
+    motor_pair.stop(motor_pair.PAIR_1)# Para os motores ao final da curva
+
+
+
+async def main():
+
+    # START 02
+    '''await andar_pra_frente(35,-400)  #sai da base de lançamento 
+    await curva(-300,0.8)  #curva de ajuste para nao pegar no berçario de corais
+    await andar_pra_frente(21,-300)  #segue ao Kraken
+    await curva(-590,0.7)  #curva de ajuste para realizar as missôes M-06,M-07
+    await andar_pra_frente(20,-200)  #Realização das M-06 e M-07 (Levanta o mastro e coleta o baú)
+    await  motor.run_for_degrees(port.C,200,300)
+    await motor.run_for_degrees(port.E,550,200)  #Entrega do mergulhador e levantar o recife de corais  
+    await andar_pra_frente(12,100)  #Se afasta da M-06 para liberar cremalheira
+    await motor.run_for_degrees(port.E,600,1000)  #libera a cremalheira no tapete
+    await curva (600,0.7)  #curva para direcionamento à base
+    await andar_pra_frente(50,1000)  #retorna à base
+    await curva(-900,0.8)
+    '''
+
+    #start mudança da rota de navegação e limpeza
+    await mover(60,300,1,0)
+    await mover(17,-200,1,0)
+    await curva(-490,0.3,0.00001)
+    await pausa(500)
+    await mover(2.7,80,1,0)
+    await pausa(300)
+    await motor.run_for_degrees(port.E,880,400)
+    await motor.run_for_degrees(port.E,200,-400)
+    await curva(490,0.5, 0.00001)
+    await mover(20,300,1, 0)
+    await curva(-220,0.3, 0.00001)
+    await motor.run_for_degrees(port.E,400,300)
+    await pausa (500)
+    await mover (7, -200, 1, 0)
+    await motor.run_for_degrees(port.C,300,200)
+    await curva(600,0.4,0.00001)
+    await mover(70,-1100,1,0)
+    
+    '''await curva(450,0.6,0.00005)'''
+    #await mover(50,1000,1,0)
+
+    #await motor.run_for_degrees(port.E,
+
+runloop.run(main())
